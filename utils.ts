@@ -1,34 +1,8 @@
 import * as Queue from 'bee-queue'
-import * as fs from 'fs'
 import { CronJob } from 'cron'
-import Bugsnag from '@bugsnag/js'
+import * as fs from 'fs'
+import _bugsnag, { Bugsnag } from '@bugsnag/js'
 import * as moment from 'moment'
-import { db } from '../wohui-backend/api/models'
-import { lift, dedup } from '../wohui-backend/api/redis/redis'
-import { workers } from '../wohui-backend/api/redis/queue'
-import { env } from '../wohui-backend/api/env'
-
-let bugsnag
-if (process.env.BUGSNAG_API_KEY) {
-  bugsnag = Bugsnag({
-    apiKey: process.env.BUGSNAG_API_KEY,
-    appType: 'worker',
-    releaseStage: env.workflow
-  })
-} else {
-  bugsnag = { notify: console.log }
-}
-
-let synced = false
-
-async function beforeStart() {
-  if (!synced) {
-    await lift("db.sync", async () => {
-      await db.sync()
-    })
-    synced = true
-  }
-}
 
 export function delayed(delayInMilliseconds: number, aggregateAttributes: string[], attributesFn: (job: Queue.Job) => Promise<{ [key: string]: string | number }>) {
   return async function (job: Queue.Job) {
@@ -40,7 +14,7 @@ export function delayed(delayInMilliseconds: number, aggregateAttributes: string
     function aggregate(job: Queue.Job) {
       for (const attr of aggregateAttributes) {
         const key = `${attr}s`
-        aggregated[key] = dedup([...(aggregated[key] || []), ...(job.data[key] || []), job.data[attr]])
+        aggregated[key] = Array.from(new Set([...(aggregated[key] || []), ...(job.data[key] || []), job.data[attr]]))
       }
     }
 
@@ -76,11 +50,31 @@ export function delayed(delayInMilliseconds: number, aggregateAttributes: string
   }
 }
 
-export function processAll(name: string, dir: string) {
+export function processAll(name: string, options: { directory: string, beforeStart?: () => Promise<void> }) {
+  const { directory: dir, beforeStart } = options
   if (!fs.existsSync(dir)) {
     return
   }
-  const queue = workers[name]
+
+  let bugsnag: Bugsnag.Client
+  if (process.env.BUGSNAG_API_KEY) {
+    bugsnag = _bugsnag({
+      apiKey: process.env.BUGSNAG_API_KEY,
+      appType: `worker:${name}`
+    })
+  } else {
+    bugsnag = { notify: console.log } as Bugsnag.Client
+  }
+
+  const queue = new Queue(name, {
+    redis: { url: process.env.REDIS_URL },
+    isWorker: true,
+    storeJobs: true,
+    ensureScripts: true,
+    activateDelayedJobs: true,
+    removeOnSuccess: true,
+    removeOnFailure: true
+  })
   const modules = {}
 
   for (const file of fs.readdirSync(dir)) {
@@ -109,7 +103,9 @@ export function processAll(name: string, dir: string) {
 
   queue.process(2, async (job: Queue.Job) => {
     !job.data.delay && console.log('start')
-    await beforeStart()
+    if (beforeStart) {
+      await beforeStart()
+    }
     const { name, delay } = job.data
     if (name) {
       const module = modules[name]

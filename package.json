@@ -1,6 +1,6 @@
 {
   "name": "@wohui/queue",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "background worker queue, support crontab, aggregation. based on bee-queue",
   "scripts": {
     "build": "tsc"
@@ -27,5 +27,9 @@
     "cron": "^1.8.2",
     "ioredis": "^4.16.1",
     "moment": "^2.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^13.11.1",
+    "typescript": "^3.8.3"
   }
 }
