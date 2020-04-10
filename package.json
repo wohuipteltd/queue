@@ -1,0 +1,31 @@
+{
+  "name": "@wohui/queue",
+  "version": "1.0.0",
+  "description": "background worker queue, support crontab, aggregation. based on bee-queue",
+  "scripts": {
+    "build": "tsc"
+  },
+  "author": "rex@interactivelabs.co",
+  "main": "dist/utils.js",
+  "types": "dist/utils.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/wohuipteltd/queue.git"
+  },
+  "keywords": [
+    "wohui",
+    "queue"
+  ],
+  "bugs": {
+    "url": "https://github.com/wohuipteltd/queue/issues"
+  },
+  "homepage": "https://github.com/wohuipteltd/queue#readme",
+  "dependencies": {
+    "@bugsnag/js": "^6.5.2",
+    "bee-queue": "^1.2.3",
+    "cron": "^1.8.2",
+    "ioredis": "^4.16.1",
+    "moment": "^2.24.0"
+  }
+}
