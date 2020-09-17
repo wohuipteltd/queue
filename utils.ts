@@ -2,7 +2,7 @@ import * as Queue from 'bee-queue'
 import { CronJob } from 'cron'
 import * as fs from 'fs'
 import { snakeCase } from 'lodash'
-import _bugsnag, { Bugsnag } from '@bugsnag/js'
+import _bugsnag, { Client } from '@bugsnag/js'
 import * as moment from 'moment'
 
 class Model<T> {
@@ -111,14 +111,14 @@ export function processAll(name: string, options: { directory: string, beforeSta
     return
   }
 
-  let bugsnag: Bugsnag.Client
+  let bugsnag: Client
   if (process.env.BUGSNAG_API_KEY) {
-    bugsnag = _bugsnag({
+    bugsnag = _bugsnag.start({
       apiKey: process.env.BUGSNAG_API_KEY,
       appType: `worker:${name}`
     })
   } else {
-    bugsnag = { notify: console.log } as Bugsnag.Client
+    bugsnag = { notify: console.log } as Client
   }
 
   const queue = new Queue(name, {
@@ -198,7 +198,7 @@ export function processAll(name: string, options: { directory: string, beforeSta
 
   queue.on('failed', (job: Queue.Job, err: Error) => {
     console.error({ error: err, job_id: job.id, job_name: job.data.name, id: job.data.id })
-    bugsnag.notify(err, { metaData: { req: job.data } })
+    bugsnag.leaveBreadcrumb(err.message, { req: job.data }, 'error')
     job.remove()
   })
 
