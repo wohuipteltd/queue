@@ -1,8 +1,59 @@
 import * as Queue from 'bee-queue'
 import { CronJob } from 'cron'
 import * as fs from 'fs'
+import { snakeCase } from 'lodash'
 import _bugsnag, { Bugsnag } from '@bugsnag/js'
 import * as moment from 'moment'
+
+class Model<T> {
+  id: number
+}
+
+type JobOptions = { queue?: string, [key: string]: any }
+
+export abstract class Queues {
+  protected queueByName(name: string): Queue {
+    throw new Error('unimplemented')
+  }
+  
+  public addJob(name: string, options: JobOptions, returnId: true): Promise<Queue.Job>
+  public addJob(name: string, options: JobOptions, returnId: false): Queue.Job
+  public addJob(name: string, options: JobOptions): Queue.Job
+  
+  public addJob(name: string, options: JobOptions, returnId: boolean = false): Promise<Queue.Job> | Queue.Job {
+    const { queue, ...others } = options
+    const job = this.queueByName(queue || name).createJob({ name, ...others })
+    if (process.env.NODE_ENV === 'test') {
+      if (returnId) return Promise.resolve(job)
+      return job
+    }
+    const future = job.save()
+    if (returnId) return future
+    return job
+  }
+  
+  public async stub(name: string, options: any, timeout_limit: number = 30_000) {
+    const job = await this.addJob(name, options, true)
+    const jobPromise = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        resolve(null)
+      }, timeout_limit)
+      job.on('failed', reject)
+      job.on('succeeded', (result) => {
+        clearTimeout(timeout)
+        resolve(result)
+      })
+    })
+    return await jobPromise
+  }
+  
+  public schedule<T extends Model<T>>(model: Model<T>, method: string, scheduleOptions: { queue?: string, delay?: number } = { delay: 15e3 }) {
+    const options = Object.assign({ delay: 15e3 }, scheduleOptions)
+    const name = `${snakeCase(model.constructor.name)}_${method}_delayed`
+    const job = this.addJob(name, { id: model.id, ...options })
+    return { id: job.data.id, name: job.data.name, delay: job.data.delay }
+  }
+}
 
 export function delayed(delayInMilliseconds: number, aggregateAttributes: string[], attributesFn: (job: Queue.Job) => Promise<{ [key: string]: string | number }>) {
   return async function (job: Queue.Job) {
@@ -102,7 +153,7 @@ export function processAll(name: string, options: { directory: string, beforeSta
   }
 
   queue.process(2, async (job: Queue.Job) => {
-    !job.data.delay && console.log('start')
+    !job.data.delay && console.log(JSON.stringify({ status: 'start', time: Date.now() }))
     if (beforeStart) {
       await beforeStart()
     }
@@ -133,7 +184,7 @@ export function processAll(name: string, options: { directory: string, beforeSta
   })
 
   queue.on('succeeded', (job: Queue.Job, result: any) => {
-    !job.data.delay && console.log(JSON.stringify({ status: 'success', job_id: job.id, job_name: job.data.name, id: job.data.id, result }))
+    !job.data.delay && console.log(JSON.stringify({ status: 'success', time: Date.now(), job_id: job.id, job_name: job.data.name, id: job.data.id, result }))
     job.remove()
   })
 

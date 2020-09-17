@@ -25,6 +25,7 @@
     "@bugsnag/js": "^6.5.2",
     "bee-queue": "^1.2.3",
     "cron": "^1.8.2",
+    "lodash": "^4.17.20",
     "moment": "^2.24.0"
   },
   "devDependencies": {
