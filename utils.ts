@@ -32,8 +32,7 @@ export abstract class Queues {
     return job
   }
   
-  public async stub(name: string, options: any, timeout_limit: number = 30_000) {
-    const job = await this.addJob(name, options, true)
+  public async stubJob(job: Queue.Job, timeout_limit: number = 30_000) {
     const jobPromise = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         resolve(null)
@@ -45,6 +44,11 @@ export abstract class Queues {
       })
     })
     return await jobPromise
+  }
+
+  public async stub(name: string, options: JobOptions, timeout_limit: number = 30_000) {
+    const job = await this.addJob(name, options, true)
+    return await this.stubJob(job, timeout_limit)
   }
   
   public schedule<T extends Model<T>>(model: Model<T>, method: string, scheduleOptions: { queue?: string, delay?: number } = { delay: 15e3 }) {
