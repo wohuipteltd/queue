@@ -1,7 +1,7 @@
 import * as Queue from 'bee-queue'
 import { CronJob } from 'cron'
 import * as fs from 'fs'
-import { snakeCase } from 'lodash'
+import * as snakeCase from 'lodash.snakecase'
 import _bugsnag, { Client } from '@bugsnag/js'
 import * as moment from 'moment'
 
