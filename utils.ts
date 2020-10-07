@@ -198,7 +198,9 @@ export function processAll(name: string, options: { directory: string, beforeSta
 
   queue.on('failed', (job: Queue.Job, err: Error) => {
     console.error({ error: err, job_id: job.id, job_name: job.data.name, id: job.data.id })
-    bugsnag.leaveBreadcrumb(err.message, { req: job.data }, 'error')
+    bugsnag.notify(err, event => {
+      event.addMetadata('JobData', job.data)
+    })
     job.remove()
   })
 
