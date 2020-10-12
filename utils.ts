@@ -128,6 +128,7 @@ export function processAll(name: string, options: { directory: string, beforeSta
     removeOnSuccess: true,
     removeOnFailure: true
   })
+  queue['bugsnag'] = bugsnag
   const modules = {}
 
   for (const file of fs.readdirSync(dir)) {
@@ -163,7 +164,8 @@ export function processAll(name: string, options: { directory: string, beforeSta
     if (name) {
       const module = modules[name]
       if (module) {
-        return await module.default(job)
+        const bugsnag: Client = queue['bugsnag']
+        return await module.default(job, bugsnag)
       } else {
         if (name.endsWith('_delayed')) {
           return await delayed(delay || 12e4, [], job => {
