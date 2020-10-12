@@ -2,7 +2,7 @@ import * as Queue from 'bee-queue'
 import { CronJob } from 'cron'
 import * as fs from 'fs'
 import * as snakeCase from 'lodash.snakecase'
-import _bugsnag, { Client } from '@bugsnag/js'
+import Bugsnag, { Client } from '@bugsnag/js'
 import * as moment from 'moment'
 
 class Model<T> {
@@ -105,22 +105,22 @@ export function delayed(delayInMilliseconds: number, aggregateAttributes: string
   }
 }
 
+export let bugsnag: Client
+if (process.env.BUGSNAG_API_KEY) {
+  bugsnag = Bugsnag.start({
+    apiKey: process.env.BUGSNAG_API_KEY,
+    appType: `worker:${name}`
+  })
+} else {
+  bugsnag = { notify: console.log } as Client
+}
+
 export function processAll(name: string, options: { directory: string, beforeStart?: () => Promise<void> }) {
   const { directory: dir, beforeStart } = options
   if (!fs.existsSync(dir)) {
     return
   }
-
-  let bugsnag: Client
-  if (process.env.BUGSNAG_API_KEY) {
-    bugsnag = _bugsnag.start({
-      apiKey: process.env.BUGSNAG_API_KEY,
-      appType: `worker:${name}`
-    })
-  } else {
-    bugsnag = { notify: console.log } as Client
-  }
-
+  
   const queue = new Queue(name, {
     redis: { url: process.env.REDIS_URL },
     isWorker: true,
