@@ -16,13 +16,13 @@ export abstract class Queues {
     throw new Error('unimplemented')
   }
   
-  public addJob(name: string, options: JobOptions, returnId: true): Promise<Queue.Job>
-  public addJob(name: string, options: JobOptions, returnId: false): Queue.Job
-  public addJob(name: string, options: JobOptions): Queue.Job
+  public addJob<T = any>(name: string, options: JobOptions, returnId: true): Promise<Queue.Job<T>>
+  public addJob<T = any>(name: string, options: JobOptions, returnId: false): Queue.Job<T>
+  public addJob<T = any>(name: string, options: JobOptions): Queue.Job<T>
   
-  public addJob(name: string, options: JobOptions, returnId: boolean = false): Promise<Queue.Job> | Queue.Job {
+  public addJob<T extends Omit<U, 'queue'> & { name: string }, U extends JobOptions>(name: string, options: U, returnId: boolean = false): Promise<Queue.Job<T>> | Queue.Job<T> {
     const { queue, ...others } = options
-    const job = this.queueByName(queue || name).createJob({ name, ...others })
+    const job: Queue.Job<T> = this.queueByName(queue || name).createJob<any>({ name, ...others })
     if (process.env.NODE_ENV === 'test') {
       if (returnId) return Promise.resolve(job)
       return job
@@ -32,7 +32,7 @@ export abstract class Queues {
     return job
   }
   
-  public async stubJob(job: Queue.Job, timeout_limit: number = 30_000) {
+  public async stubJob<T>(job: Queue.Job<T>, timeout_limit: number = 30_000) {
     const jobPromise = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         resolve(null)
@@ -59,14 +59,14 @@ export abstract class Queues {
   }
 }
 
-export function delayed(delayInMilliseconds: number, aggregateAttributes: string[], attributesFn: (job: Queue.Job) => Promise<{ [key: string]: string | number }>) {
-  return async function (job: Queue.Job) {
+export function delayed<T extends A & { name: string}, A = { [key: string]: string | number }>(delayInMilliseconds: number, aggregateAttributes: string[], attributesFn: (job: Queue.Job<T>) => Promise<A>) {
+  return async function (job: Queue.Job<T>) {
     const { name } = job.data
     const attributes = await attributesFn(job)
     const real_name = name.replace(/_delayed$/, '')
     // if attributesFn removes id from job.data
-    const aggregated = {}
-    function aggregate(job: Queue.Job) {
+    const aggregated: any = {}
+    function aggregate(job: Queue.Job<T>) {
       for (const attr of aggregateAttributes) {
         const key = `${attr}s`
         aggregated[key] = Array.from(new Set([...(aggregated[key] || []), ...(job.data[key] || []), job.data[attr]]))
@@ -93,7 +93,7 @@ export function delayed(delayInMilliseconds: number, aggregateAttributes: string
     }
     aggregate(job)
 
-    const newJobData = {
+    const newJobData: T = {
       name: real_name,
       ...attributes,
       ...aggregated
@@ -155,7 +155,7 @@ export function processAll(name: string, options: { directory: string, beforeSta
     }
   }
 
-  queue.process(2, async (job: Queue.Job) => {
+  queue.process(2, async (job: Queue.Job<any>) => {
     !job.data.delay && console.log(JSON.stringify({ status: 'start', time: Date.now() }))
     if (beforeStart) {
       await beforeStart()
@@ -168,7 +168,7 @@ export function processAll(name: string, options: { directory: string, beforeSta
         return await module.default(job, bugsnag)
       } else {
         if (name.endsWith('_delayed')) {
-          return await delayed(delay || 12e4, [], job => {
+          return await delayed(delay || 12e4, [], (job: Queue.Job<any>) => {
             const { name, ...others } = job.data
             return others
           })(job)
@@ -187,16 +187,16 @@ export function processAll(name: string, options: { directory: string, beforeSta
     bugsnag.notify(err)
   })
 
-  queue.on('succeeded', (job: Queue.Job, result: any) => {
+  queue.on('succeeded', (job: Queue.Job<any>, result: any) => {
     !job.data.delay && console.log(JSON.stringify({ status: 'success', time: Date.now(), job_id: job.id, job_name: job.data.name, id: job.data.id, result }))
     job.remove()
   })
 
-  queue.on('retrying', (job: Queue.Job, err: Error) => {
+  queue.on('retrying', (job: Queue.Job<any>, err: Error) => {
     console.error({ error: err, job_id: job.id, job_name: job.data.name, id: job.data.id })
   })
 
-  queue.on('failed', (job: Queue.Job, err: Error) => {
+  queue.on('failed', (job: Queue.Job<any>, err: Error) => {
     console.error({ error: err, job_id: job.id, job_name: job.data.name, id: job.data.id })
     bugsnag.notify(err, event => {
       event.addMetadata('JobData', job.data)
