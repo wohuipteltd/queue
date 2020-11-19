@@ -83,7 +83,7 @@ export function delayed<T extends A & { name: string}, A = { [key: string]: stri
       } else {
         idx++
       }
-      jobs = jobs.filter(j => (j.data.name === real_name && Object.keys(attributes).every(key => j.data[key] == attributes[key])))
+      jobs = jobs.filter(j => (j.data.name === real_name && Object.keys(attributes).every(key => JSON.stringify(j.data[key]) == JSON.stringify(attributes[key]))))
 
       for (const j of jobs) {
         aggregate(job)
