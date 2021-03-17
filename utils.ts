@@ -156,7 +156,7 @@ export function processAll(name: string, options: { directory: string, beforeSta
   }
 
   queue.process(2, async (job: Queue.Job<any>) => {
-    !job.data.delay && console.log(JSON.stringify({ status: 'start', time: Date.now() }))
+    !job.data.delay && console.log(JSON.stringify({ status: 'start', time: Date.now(), job_id: job.id, job_name: job.data.name, id: job.data.id }))
     if (beforeStart) {
       await beforeStart()
     }
