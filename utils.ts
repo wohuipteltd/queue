@@ -5,10 +5,6 @@ import * as snakeCase from 'lodash.snakecase'
 import Bugsnag, { Client } from '@bugsnag/js'
 import * as moment from 'moment'
 
-class Model<T> {
-  id: number
-}
-
 type JobOptions = { queue?: string, [key: string]: any }
 
 export abstract class Queues {
@@ -51,7 +47,7 @@ export abstract class Queues {
     return await this.stubJob(job, timeout_limit)
   }
   
-  public schedule<T extends Model<T>>(model: Model<T>, method: string, scheduleOptions: { queue?: string, delay?: number } = { delay: 15e3 }) {
+  public schedule<T extends { id: number }>(model: T, method: string, scheduleOptions: { queue?: string, delay?: number } = { delay: 15e3 }) {
     const options = Object.assign({ delay: 15e3 }, scheduleOptions)
     const name = `${snakeCase(model.constructor.name)}_${method}_delayed`
     const job = this.addJob(name, { id: model.id, ...options })
@@ -59,7 +55,7 @@ export abstract class Queues {
   }
 }
 
-export function delayed<T extends A & { name: string}, A = { [key: string]: string | number }>(delayInMilliseconds: number, aggregateAttributes: string[], attributesFn: (job: Queue.Job<T>) => Promise<A>) {
+function delayed<T extends A & { name: string}, A = { [key: string]: string | number }>(delayInMilliseconds: number, aggregateAttributes: string[], attributesFn: (job: Queue.Job<T>) => Promise<A>) {
   return async function (job: Queue.Job<T>) {
     const { name } = job.data
     const attributes = await attributesFn(job)
