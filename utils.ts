@@ -128,9 +128,7 @@ export function processAll(name: string, options: { directory: string, beforeSta
   const modules = {}
 
   for (const file of fs.readdirSync(dir)) {
-    const ext = __filename.substring(__filename.lastIndexOf('.'))
-    
-    if (!file.startsWith('index') && file.endsWith(ext)) {
+    if (!file.startsWith('index') && (file.endsWith('.ts') || file.endsWith('.js')) ) {
       const module = require(`${dir}/${file}`)
       if (module && typeof module.default === 'function') {
         const name = file.substring(0, file.lastIndexOf('.'))
