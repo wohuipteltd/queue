@@ -1,24 +1,23 @@
 import * as Queue from 'bee-queue'
 import { CronJob } from 'cron'
 import * as fs from 'fs'
-import * as snakeCase from 'lodash.snakecase'
 import Bugsnag, { Client } from '@bugsnag/js'
 import * as moment from 'moment'
 
-type JobOptions = { queue?: string, [key: string]: any }
+type JobOptions = { queue?: string }
 
 export abstract class Queues {
   protected queueByName(name: string): Queue {
     throw new Error('unimplemented')
   }
-  
-  public addJob<T = any>(name: string, options: JobOptions, returnId: true): Promise<Queue.Job<T>>
-  public addJob<T = any>(name: string, options: JobOptions, returnId: false): Queue.Job<T>
-  public addJob<T = any>(name: string, options: JobOptions): Queue.Job<T>
-  
-  public addJob<T extends Omit<U, 'queue'> & { name: string }, U extends JobOptions>(name: string, options: U, returnId: boolean = false): Promise<Queue.Job<T>> | Queue.Job<T> {
+
+  public addJob<U extends JobOptions>(name: string, options: U, returnId: true): Promise<Queue.Job<Omit<U, 'queue'> & { name: string }>>
+  public addJob<U extends JobOptions>(name: string, options: U, returnId: false): Queue.Job<Omit<U, 'queue'> & { name: string }>
+  public addJob<U extends JobOptions>(name: string, options: U): Queue.Job<Omit<U, 'queue'> & { name: string }>
+
+  public addJob<U extends JobOptions>(name: string, options: U, returnId: boolean = false): Promise<Queue.Job<Omit<U, 'queue'> & { name: string }>> | Queue.Job<Omit<U, 'queue'> & { name: string }> {
     const { queue, ...others } = options
-    const job: Queue.Job<T> = this.queueByName(queue || name).createJob<any>({ name, ...others })
+    const job = this.queueByName(queue || name).createJob({ name, ...others })
     if (process.env.NODE_ENV === 'test') {
       if (returnId) return Promise.resolve(job)
       return job
@@ -27,9 +26,15 @@ export abstract class Queues {
     if (returnId) return future
     return job
   }
-  
+
   public async stubJob<T>(job: Queue.Job<T>, timeout_limit: number = 30_000) {
     const jobPromise = new Promise((resolve, reject) => {
+      if (job.status === 'succeeded') {
+        return resolve(undefined)
+      }
+      if (job.status === 'failed') {
+        return reject(undefined)
+      }
       const timeout = setTimeout(() => {
         resolve(null)
       }, timeout_limit)
@@ -45,13 +50,6 @@ export abstract class Queues {
   public async stub(name: string, options: JobOptions, timeout_limit: number = 30_000) {
     const job = await this.addJob(name, options, true)
     return await this.stubJob(job, timeout_limit)
-  }
-  
-  public schedule<T extends { id: number }>(model: T, method: string, scheduleOptions: { queue?: string, delay?: number } = { delay: 15e3 }) {
-    const options = Object.assign({ delay: 15e3 }, scheduleOptions)
-    const name = `${snakeCase(model.constructor.name)}_${method}_delayed`
-    const job = this.addJob(name, { id: model.id, ...options })
-    return { id: job.data.id, name: job.data.name, delay: job.data.delay }
   }
 }
 
@@ -101,20 +99,30 @@ function delayed<T extends A & { name: string}, A = { [key: string]: string | nu
   }
 }
 
+const __clients: { [name: string]: Client } = {}
+
+const lazyloadBugsnag = (name: string) => {
+  if (!__clients[name]) {
+    let bugsnag: Client
+    if (process.env.BUGSNAG_API_KEY) {
+      bugsnag = Bugsnag.start({
+        apiKey: process.env.BUGSNAG_API_KEY,
+        appType: `worker:${name}`
+      })
+    } else {
+      bugsnag = { notify: console.log } as Client
+    }
+    __clients[name] = bugsnag
+  }
+  return __clients[name]
+}
 export function processAll(name: string, options: { directory: string, beforeStart?: () => Promise<void> }) {
   const { directory: dir, beforeStart } = options
   if (!fs.existsSync(dir)) {
     return
   }
-  let bugsnag: Client
-  if (process.env.BUGSNAG_API_KEY) {
-    bugsnag = Bugsnag.start({
-      apiKey: process.env.BUGSNAG_API_KEY,
-      appType: `worker:${name}`
-    })
-  } else {
-    bugsnag = { notify: console.log } as Client
-  }
+
+  const bugsnag = lazyloadBugsnag(name)
   const queue = new Queue(name, {
     redis: { url: process.env.REDIS_URL },
     isWorker: true,
@@ -124,7 +132,6 @@ export function processAll(name: string, options: { directory: string, beforeSta
     removeOnSuccess: true,
     removeOnFailure: true
   })
-  queue['bugsnag'] = bugsnag
   const modules = {}
 
   for (const file of fs.readdirSync(dir)) {
@@ -158,7 +165,6 @@ export function processAll(name: string, options: { directory: string, beforeSta
     if (name) {
       const module = modules[name]
       if (module) {
-        const bugsnag: Client = queue['bugsnag']
         return await module.default(job, bugsnag)
       } else {
         if (name.endsWith('_delayed')) {
