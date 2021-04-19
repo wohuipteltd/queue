@@ -4,7 +4,11 @@ import * as fs from 'fs'
 import Bugsnag, { Client } from '@bugsnag/js'
 import * as moment from 'moment'
 
-type JobOptions = { queue?: string }
+type JobOptions = {
+  queue?: string
+  delay?: number
+  [key: string]: any
+}
 
 export abstract class Queues {
   protected queueByName(name: string): Queue {
