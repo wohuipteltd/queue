@@ -161,7 +161,7 @@ export function processAll(name: string, options: { directory: string, beforeSta
   }
 
   queue.process(2, async (job: Queue.Job<any>) => {
-    !job.data.delay && console.log(JSON.stringify({ status: 'start', time: Date.now(), job_id: job.id, job_name: job.data.name, id: job.data.id }))
+    !job.data.delay && console.log(JSON.stringify({ status: 'start', job_id: job.id, job_data: job.data }))
     if (beforeStart) {
       await beforeStart()
     }
@@ -183,7 +183,7 @@ export function processAll(name: string, options: { directory: string, beforeSta
   })
 
   queue.on('ready', () => {
-    console.log('queue is ready')
+    console.log(`${name} queue is ready`)
   })
 
   queue.on('error', (err: Error) => {
@@ -192,16 +192,16 @@ export function processAll(name: string, options: { directory: string, beforeSta
   })
 
   queue.on('succeeded', (job: Queue.Job<any>, result: any) => {
-    !job.data.delay && console.log(JSON.stringify({ status: 'success', time: Date.now(), job_id: job.id, job_name: job.data.name, id: job.data.id, result }))
+    !job.data.delay && console.log(JSON.stringify({ status: 'succeeded', job_id: job.id, job_data: job.data, result }))
     job.remove()
   })
 
   queue.on('retrying', (job: Queue.Job<any>, err: Error) => {
-    console.error({ error: err, job_id: job.id, job_name: job.data.name, id: job.data.id })
+    console.error({ status: 'retrying', error: err, job_id: job.id, job_data: job.data })
   })
 
   queue.on('failed', (job: Queue.Job<any>, err: Error) => {
-    console.error({ error: err, job_id: job.id, job_name: job.data.name, id: job.data.id })
+    console.error({ status: 'failed', error: err, job_id: job.id, job_data: job.data })
     bugsnag.notify(err, event => {
       event.addMetadata('JobData', job.data)
     })
